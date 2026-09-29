@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Still Meditation Timer</title>
+<meta name="description" content="A lightweight meditation timer with bells, ambience and a breathing guide.">
+<meta name="theme-color" content="#0e1320">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Manrope:wght@200;300;400;500;600&display=swap">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<!-- BODY:START -->
+<div class="atmosphere" aria-hidden="true">
+  <div class="glow g1"></div>
+  <div class="glow g2"></div>
+  <div class="glow g3"></div>
+  <canvas id="motes"></canvas>
+</div>
+
+<div class="app" id="app">
+  <header class="topbar">
+    <button class="icon-btn" id="btn-stats" aria-label="Your practice">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 20V11M12 20V5M19 20v-6"/></svg>
+    </button>
+    <div class="brand">Still</div>
+    <button class="icon-btn" id="btn-settings" aria-label="Settings">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h10M18 7h2M4 17h4M12 17h8"/><circle cx="16" cy="7" r="2"/><circle cx="10" cy="17" r="2"/></svg>
+    </button>
+  </header>
+
+  <!-- Home: choose a duration -->
+  <section class="screen is-active" id="screen-home" aria-label="Set a timer">
+    <div class="greeting">
+      <p class="greeting-line" id="greeting">Good evening</p>
+      <p class="greeting-sub" id="greeting-sub">Take a moment for yourself.</p>
+    </div>
+
+    <div class="dial-wrap">
+      <div class="dial" id="dial" role="slider" tabindex="0" aria-label="Meditation length in minutes"
+           aria-valuemin="1" aria-valuemax="600" aria-valuenow="10">
+        <svg viewBox="0 0 300 300" aria-hidden="true">
+          <g id="dial-ticks"></g>
+          <circle class="dial-track" cx="150" cy="150" r="124"/>
+          <circle class="dial-laps" id="dial-laps" cx="150" cy="150" r="124"/>
+          <circle class="dial-arc" id="dial-arc" cx="150" cy="150" r="124"/>
+          <g id="dial-knob-g">
+            <circle class="dial-knob-halo" cx="150" cy="26" r="20"/>
+            <circle class="dial-knob" cx="150" cy="26" r="11"/>
+          </g>
+        </svg>
+        <button class="dial-center" id="btn-time" aria-label="Type an exact length">
+          <span class="dial-value" id="dial-value">10</span>
+          <span class="dial-unit" id="dial-unit">minutes</span>
+          <span class="dial-edit">tap to type</span>
+        </button>
+      </div>
+    </div>
+
+    <div class="presets" id="presets" role="group" aria-label="Quick lengths"></div>
+
+    <div class="summary" id="summary"></div>
+
+    <button class="primary" id="btn-begin">
+      <span>Begin</span>
+    </button>
+  </section>
+
+  <!-- Session -->
+  <section class="screen" id="screen-session" aria-label="Meditation in progress">
+    <div class="session-stage">
+      <svg class="progress" viewBox="0 0 300 300" aria-hidden="true">
+        <circle class="progress-track" cx="150" cy="150" r="140"/>
+        <circle class="progress-arc" id="progress-arc" cx="150" cy="150" r="140"/>
+        <g id="progress-marks"></g>
+      </svg>
+      <div class="orb-field">
+        <div class="orb-ring" id="orb-ring"></div>
+        <div class="orb" id="orb"></div>
+      </div>
+      <div class="breath-label" id="breath-label" aria-live="polite"></div>
+    </div>
+
+    <div class="session-info">
+      <div class="session-time" id="session-time" aria-live="off">10:00</div>
+      <div class="session-sub" id="session-sub">Settle in</div>
+    </div>
+
+    <div class="session-controls">
+      <button class="round-btn" id="btn-pause" aria-label="Pause">
+        <svg class="i-pause" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6v12M15 6v12"/></svg>
+        <svg class="i-play" viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5.5v13l10.5-6.5z"/></svg>
+      </button>
+      <button class="text-btn" id="btn-end">End session</button>
+    </div>
+  </section>
+
+  <!-- Complete -->
+  <section class="screen" id="screen-complete" aria-label="Session complete">
+    <div class="complete-mark" aria-hidden="true">
+      <svg viewBox="0 0 120 120"><circle class="cm-ring" cx="60" cy="60" r="52"/><path class="cm-check" d="M40 62l14 14 28-30"/></svg>
+    </div>
+    <h2 class="complete-title" id="complete-title">Well done</h2>
+    <p class="complete-summary" id="complete-summary">You sat for 10 minutes.</p>
+
+    <div class="complete-stats">
+      <div><span class="cs-num" id="cs-streak">1</span><span class="cs-label">day streak</span></div>
+      <div><span class="cs-num" id="cs-today">10</span><span class="cs-label">minutes today</span></div>
+      <div><span class="cs-num" id="cs-total">1</span><span class="cs-label">sessions</span></div>
+    </div>
+
+    <div class="mood">
+      <p class="mood-q">How do you feel?</p>
+      <div class="mood-options" id="mood-options" role="group" aria-label="How do you feel"></div>
+      <label class="note-field">
+        <span class="sr-only">Note</span>
+        <input id="note-input" type="text" maxlength="140" placeholder="Add a note (optional)">
+      </label>
+    </div>
+
+    <button class="primary" id="btn-done"><span>Done</span></button>
+  </section>
+</div>
+
+<!-- Settings sheet -->
+<div class="sheet" id="sheet-settings" role="dialog" aria-modal="true" aria-labelledby="settings-title" hidden>
+  <div class="sheet-scrim" data-close></div>
+  <div class="sheet-panel">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="settings-title">Settings</h2>
+      <button class="icon-btn" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body" id="settings-body"></div>
+  </div>
+</div>
+
+<!-- Stats sheet -->
+<div class="sheet" id="sheet-stats" role="dialog" aria-modal="true" aria-labelledby="stats-title" hidden>
+  <div class="sheet-scrim" data-close></div>
+  <div class="sheet-panel">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-head">
+      <h2 id="stats-title">Your practice</h2>
+      <button class="icon-btn" data-close aria-label="Close">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+      </button>
+    </div>
+    <div class="sheet-body" id="stats-body"></div>
+  </div>
+</div>
+
+<!-- Exact time dialog -->
+<div class="sheet sheet-center" id="sheet-time" role="dialog" aria-modal="true" aria-labelledby="time-title" hidden>
+  <div class="sheet-scrim" data-close></div>
+  <form class="sheet-panel time-panel" id="time-form">
+    <h2 id="time-title">Set length</h2>
+    <div class="time-inputs">
+      <label><input id="t-h" type="number" inputmode="numeric" min="0" max="23" value="0"><span>hours</span></label>
+      <span class="colon">:</span>
+      <label><input id="t-m" type="number" inputmode="numeric" min="0" max="59" value="10"><span>min</span></label>
+      <span class="colon">:</span>
+      <label><input id="t-s" type="number" inputmode="numeric" min="0" max="59" value="0"><span>sec</span></label>
+    </div>
+    <div class="time-actions">
+      <button type="button" class="text-btn" data-close>Cancel</button>
+      <button type="submit" class="primary small"><span>Set</span></button>
+    </div>
+  </form>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<!-- BODY:END -->
+<script src="js/audio.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

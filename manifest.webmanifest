@@ -1,0 +1,14 @@
+{
+  "name": "Still — Meditation Timer",
+  "short_name": "Still",
+  "description": "A lightweight meditation timer with bells, ambience and a breathing guide.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0e1320",
+  "theme_color": "#0e1320",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

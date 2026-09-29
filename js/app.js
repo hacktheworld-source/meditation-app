@@ -85,6 +85,7 @@
     if (s) parts.push(s + (h || m ? ' sec' : ' seconds'));
     return parts.join(' ') || '0 minutes';
   }
+  function fmtMin(min) { return min > 0 && min < 1 ? '<1' : String(Math.round(min)); }
   function dayKey(ts) {
     const d = new Date(ts);
     return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate());
@@ -164,7 +165,7 @@
     $('#greeting').innerHTML = line;
     const st = stats();
     let sub = 'Take a moment for yourself.';
-    if (st.streak && st.sitToday) sub = st.streak + '-day streak · ' + Math.round(st.todaySec / 60) + ' min today';
+    if (st.streak && st.sitToday) sub = st.streak + '-day streak · ' + fmtMin(st.todaySec / 60) + ' min today';
     else if (st.streak) sub = 'Sit today to keep your ' + st.streak + '-day streak.';
     else if (st.count) sub = 'Welcome back. Begin again whenever you’re ready.';
     $('#greeting-sub').textContent = sub;
@@ -287,7 +288,8 @@
     const target = sec / 60;
     cancelAnimationFrame(dialAnim);
     if (!animate || reducedMotion()) { dialMinutes = target; drawDial(target); return; }
-    const from = dialMinutes, t0 = performance.now(), dur = 650;
+    const from = Math.abs(target - dialMinutes) > 60 ? target - Math.sign(target - dialMinutes) * 60 : dialMinutes;
+    const t0 = performance.now(), dur = 650;
     const step = function (now) {
       const p = Math.min(1, (now - t0) / dur);
       const e = 1 - Math.pow(1 - p, 3);
@@ -312,7 +314,7 @@
 
     dial.addEventListener('pointerdown', function (ev) {
       const p = angleOf(ev);
-      if (p.d < 0.52) return; // centre is the "type a time" button
+      if (p.d < 0.58) return; // centre is the "type a time" button
       A.init();
       dragging = true;
       dial.classList.add('dragging');
@@ -392,18 +394,21 @@
 
   let openSheetId = null;
   let lastFocus = null;
+  let usingKeyboard = false;
+  document.addEventListener('keydown', function (ev) { if (ev.key === 'Tab' || ev.key === 'Enter' || ev.key === ' ') usingKeyboard = true; }, true);
+  document.addEventListener('pointerdown', function () { usingKeyboard = false; }, true);
   function openSheet(id) {
     if (openSheetId) closeSheet(openSheetId, true);
     const el = $('#sheet-' + id);
     if (id === 'settings') renderSettings();
     if (id === 'stats') renderStats();
-    lastFocus = document.activeElement;
+    lastFocus = usingKeyboard ? document.activeElement : null;
     el.hidden = false;
     requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('open'); }); });
     openSheetId = id;
     ui('open');
     const focusable = el.querySelector('.sheet-head [data-close]');
-    if (focusable) setTimeout(function () { focusable.focus({ preventScroll: true }); }, 60);
+    if (focusable && usingKeyboard) setTimeout(function () { focusable.focus({ preventScroll: true }); }, 60);
   }
   function closeSheet(id, silent) {
     const el = $('#sheet-' + id);
@@ -412,8 +417,42 @@
     setTimeout(function () { if (!el.classList.contains('open')) el.hidden = true; }, 550);
     if (openSheetId === id) openSheetId = null;
     if (!silent) ui('close');
-    if (id === 'settings' && S.phase === 'idle') A.stopAmbient(1.2);
+    if (id === 'settings' && S.phase !== 'running') A.stopAmbient(1.2);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
+    else if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+    lastFocus = null;
+  }
+
+  function initSheetDrag() {
+    $$('.sheet').forEach(function (sheet) {
+      const panel = $('.sheet-panel', sheet);
+      const grab = $$('.sheet-handle, .sheet-head', sheet);
+      if (!grab.length) return;
+      let y0 = null, dy = 0;
+      grab.forEach(function (g) {
+        g.classList.add('sheet-grab');
+        g.addEventListener('pointerdown', function (ev) {
+          if (ev.target.closest('button')) return;
+          y0 = ev.clientY; dy = 0;
+          panel.classList.add('dragging');
+          g.setPointerCapture(ev.pointerId);
+        });
+        g.addEventListener('pointermove', function (ev) {
+          if (y0 == null) return;
+          dy = Math.max(0, ev.clientY - y0);
+          panel.style.transform = 'translateY(' + dy + 'px)';
+        });
+        const end = function () {
+          if (y0 == null) return;
+          y0 = null;
+          panel.classList.remove('dragging');
+          panel.style.transform = '';
+          if (dy > 90) closeSheet(sheet.id.replace('sheet-', ''));
+        };
+        g.addEventListener('pointerup', end);
+        g.addEventListener('pointercancel', end);
+      });
+    });
   }
 
   /* ---------- Settings ---------- */
@@ -620,9 +659,9 @@
     html += '<div class="chart-head"><h3>Last 7 days</h3><span>' + Math.round(weekMin) + ' min total</span></div>';
     html += '<div class="week" role="img" aria-label="Minutes meditated over the last seven days">';
     days.forEach(function (d, i) {
-      const h = d.min ? Math.max(4, (d.min / max) * 100) : 0;
-      html += '<div class="bar-col' + (d.today ? ' today' : '') + '" title="' + d.full + ': ' + Math.round(d.min) + ' min">' +
-        '<span class="bar-val">' + Math.round(d.min) + '</span>' +
+      const h = d.min ? Math.max(4, (d.min / max) * 82) : 0;
+      html += '<div class="bar-col' + (d.today ? ' today' : '') + '" title="' + d.full + ': ' + fmtMin(d.min) + ' min">' +
+        '<span class="bar-val">' + fmtMin(d.min) + '</span>' +
         '<div class="bar' + (d.min ? '' : ' zero') + '" style="height:' + h + '%;animation-delay:' + i * 60 + 'ms"></div></div>';
     });
     html += '</div><div class="week-labels">';
@@ -634,7 +673,7 @@
       html += '<p class="empty">Your sessions will appear here after your first sit.</p>';
     } else {
       html += '<ul>';
-      sessions.slice(-12).reverse().forEach(function (s) {
+      sessions.slice().sort(function (a, b) { return b.ts - a.ts; }).slice(0, 12).forEach(function (s) {
         const d = new Date(s.ts);
         const when = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' }) + ', ' + d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
         html += '<li><div class="r-main"><div class="r-date">' + when + (s.mood ? ' · <span class="r-mood">' + esc(s.mood) + '</span>' : '') + '</div>' +
@@ -917,6 +956,12 @@
     }
     stopEngine();
     A.stopAmbient(completed ? 9 : 4);
+    if (completed) {
+      $('#session-time').textContent = fmtClock(0);
+      $('#progress-arc').style.strokeDashoffset = 0;
+      $('#session-sub').textContent = 'Complete';
+      $('#breath-label').classList.remove('show');
+    }
 
     if (!completed && sat < 30) {
       S.phase = 'idle';
@@ -938,7 +983,7 @@
       ? 'You sat for ' + fmtLen(sat) + '.'
       : 'You sat for ' + fmtLen(sat) + ' of ' + fmtLen(S.dur) + '.';
     $('#cs-streak').textContent = st.streak;
-    $('#cs-today').textContent = Math.round(st.todaySec / 60);
+    $('#cs-today').textContent = fmtMin(st.todaySec / 60);
     $('#cs-total').textContent = st.count;
     $('#note-input').value = '';
     $$('#mood-options .chip').forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
@@ -1057,6 +1102,8 @@
   /* ---------- Wiring ---------- */
 
   function init() {
+    A.setBellVolume(settings.bellVolume);
+    A.setAmbientVolume(settings.ambientVolume);
     applyLook();
     buildTicks();
     dialMinutes = settings.durationSec / 60;
@@ -1067,6 +1114,7 @@
     renderGreeting();
     renderMoods();
     initDial();
+    initSheetDrag();
     initMotes();
 
     $('#btn-time').addEventListener('click', function () { A.init(); ui('tap'); openTime(); });

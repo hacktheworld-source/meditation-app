@@ -1,6 +1,6 @@
 // Still — offline cache. Bump VERSION when files change.
-const VERSION = 'still-v1';
-const FILES = ['./', 'index.html', 'css/style.css', 'js/audio.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon.svg'];
+const VERSION = 'still-v2';
+const FILES = ['./', 'index.html', 'css/style.css', 'js/audio.js', 'js/app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));

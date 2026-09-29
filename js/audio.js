@@ -145,13 +145,6 @@
     const sources = [];
     let end = t0;
     const notes = def.notes || [{ at: 0, g: 1 }];
-    const pan = ctx.createStereoPanner ? ctx.createStereoPanner() : null;
-    if (pan) {
-      pan.pan.value = 0;
-      out.disconnect();
-      out.connect(pan);
-      pan.connect(bellBus);
-    }
 
     notes.forEach(function (n) {
       const base = (n.f || def.f) * (n.detune || 1);

@@ -49,7 +49,7 @@ js/audio.js           synthesized bells, ambience and interface sounds
 js/app.js             dial, session engine, settings and stats
 sw.js                 offline cache
 manifest.webmanifest  install metadata
-icons/icon.svg        app icon
+icons/               app icons (SVG + PNG)
 ```
 
 History and settings are stored in `localStorage` on your device only.

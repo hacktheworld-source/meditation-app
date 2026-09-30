@@ -14,6 +14,7 @@ A lightweight meditation timer that runs in any modern browser. No build step, n
 - **Pause and resume.** Scheduled bells are cancelled and rescheduled accurately.
 - **Progress.** Current and longest streak, total mindful time, a 7-day chart, and recent sessions with an optional mood and note.
 - **Themes.** Night, Dawn, Forest, or match your device.
+- **Fits any screen.** Every screen resizes to fit, from small phones to landscape, with no scrolling.
 - **Works offline** and can be installed to your home screen (PWA). The screen stays awake during a session where the browser supports it, and phones can vibrate with each bell.
 
 ## Run it

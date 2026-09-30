@@ -401,11 +401,13 @@
     if (openSheetId) closeSheet(openSheetId, true);
     const el = $('#sheet-' + id);
     if (id === 'settings') renderSettings();
-    if (id === 'stats') renderStats();
     lastFocus = usingKeyboard ? document.activeElement : null;
     el.hidden = false;
+    document.body.classList.add('sheet-open');
     requestAnimationFrame(function () { requestAnimationFrame(function () { el.classList.add('open'); }); });
     openSheetId = id;
+    if (id === 'stats') renderStats();
+    fitSoon();
     ui('open');
     const focusable = el.querySelector('.sheet-head [data-close]');
     if (focusable && usingKeyboard) setTimeout(function () { focusable.focus({ preventScroll: true }); }, 60);
@@ -416,6 +418,7 @@
     el.classList.remove('open');
     setTimeout(function () { if (!el.classList.contains('open')) el.hidden = true; }, 550);
     if (openSheetId === id) openSheetId = null;
+    if (!openSheetId) document.body.classList.remove('sheet-open');
     if (!silent) ui('close');
     if (id === 'settings' && S.phase !== 'running') A.stopAmbient(1.2);
     if (lastFocus && lastFocus.focus) lastFocus.focus({ preventScroll: true });
@@ -457,6 +460,10 @@
 
   /* ---------- Settings ---------- */
 
+  function afterPaint(fn) {
+    requestAnimationFrame(function () { setTimeout(fn, 0); });
+  }
+
   function chipGroup(opts, current, onPick) {
     const wrap = document.createElement('div');
     wrap.className = 'chips';
@@ -469,7 +476,8 @@
       b.addEventListener('click', function () {
         $$('.chip', wrap).forEach(function (c) { c.setAttribute('aria-pressed', 'false'); });
         b.setAttribute('aria-pressed', 'true');
-        onPick(o.id);
+        // let the new highlight paint before any sound work runs
+        afterPaint(function () { onPick(o.id); });
       });
       wrap.appendChild(b);
     });
@@ -534,16 +542,45 @@
   function group(title) {
     const g = document.createElement('section');
     g.className = 'group';
-    const h = document.createElement('h3');
-    h.className = 'group-title';
-    h.textContent = title;
-    g.appendChild(h);
+    if (title) {
+      const h = document.createElement('h3');
+      h.className = 'group-title';
+      h.textContent = title;
+      g.appendChild(h);
+    }
     return g;
   }
 
+  const SETTINGS_TABS = [['bells', 'Bells'], ['interval', 'Interval'], ['ambience', 'Ambience'], ['breath', 'Breath'], ['general', 'More']];
+  let settingsTab = 'bells';
+
+  function renderSettingsTabs() {
+    const bar = $('#settings-tabs');
+    bar.innerHTML = '';
+    SETTINGS_TABS.forEach(function (t) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'tab';
+      b.id = 'tab-' + t[0];
+      b.setAttribute('role', 'tab');
+      b.setAttribute('aria-selected', String(t[0] === settingsTab));
+      b.textContent = t[1];
+      b.addEventListener('click', function () {
+        if (settingsTab === t[0]) return;
+        settingsTab = t[0];
+        ui('tap');
+        renderSettings();
+      });
+      bar.appendChild(b);
+    });
+  }
+
   function renderSettings() {
+    renderSettingsTabs();
     const body = $('#settings-body');
     body.innerHTML = '';
+    body.setAttribute('aria-labelledby', 'tab-' + settingsTab);
+    const tab = settingsTab;
     const bellOpts = A.bells.concat([{ id: 'none', label: 'None' }]);
     const pick = function (key, preview) {
       return function (v) {
@@ -555,78 +592,135 @@
     };
     const previewBell = function (vol) { return function (v) { if (v !== 'none') A.strike(v, 0, vol); }; };
 
-    // Bells
-    const g1 = group('Bells');
-    g1.appendChild(field('Starting bell', null, chipGroup(bellOpts, settings.startBell, pick('startBell', previewBell(1)))));
-    g1.appendChild(field('Ending bell', null, chipGroup(bellOpts, settings.endBell, pick('endBell', previewBell(1)))));
-    g1.appendChild(field('Ending strikes', null, chipGroup([{ id: 1, label: 'Once' }, { id: 3, label: 'Three times' }], settings.endStrikes, pick('endStrikes'))));
-    const intervalOpts = [{ id: 0, label: 'Off' }].concat([1, 2, 3, 5, 10, 15, 20].map(function (m) { return { id: m, label: m + ' min' }; }));
-    g1.appendChild(field('Interval bell', 'rings softly during the sit', chipGroup(intervalOpts, settings.intervalMin, pick('intervalMin'))));
-    g1.appendChild(field('Interval sound', null, chipGroup(A.bells, settings.intervalBell, pick('intervalBell', previewBell(0.55)))));
-    g1.appendChild(field('Bell volume', null, slider('bell-volume', 'bellVolume', A.setBellVolume)));
-    body.appendChild(g1);
+    if (tab === 'bells') {
+      const g1 = group(null);
+      g1.appendChild(field('Starting bell', null, chipGroup(bellOpts, settings.startBell, pick('startBell', previewBell(1)))));
+      g1.appendChild(field('Ending bell', null, chipGroup(bellOpts, settings.endBell, pick('endBell', previewBell(1)))));
+      g1.appendChild(field('Ending strikes', null, chipGroup([{ id: 1, label: 'Once' }, { id: 3, label: 'Three times' }], settings.endStrikes, pick('endStrikes'))));
+      g1.appendChild(field('Bell volume', null, slider('bell-volume', 'bellVolume', A.setBellVolume)));
+      body.appendChild(g1);
+    }
 
-    // Ambience
-    const g2 = group('Ambience');
-    const ambOpts = [{ id: 'none', label: 'Silence' }].concat(A.ambience);
-    g2.appendChild(field('Background sound', 'tap to preview', chipGroup(ambOpts, settings.ambient, pick('ambient', function (v) {
-      if (v === 'none') A.stopAmbient(1);
-      else A.startAmbient(v, 1.2);
-    }))));
-    g2.appendChild(field('Ambience volume', null, slider('ambient-volume', 'ambientVolume', A.setAmbientVolume)));
-    body.appendChild(g2);
+    if (tab === 'interval') {
+      const gi = group(null);
+      const intervalOpts = [{ id: 0, label: 'Off' }].concat([1, 2, 3, 5, 10, 15, 20].map(function (m) { return { id: m, label: m + ' min' }; }));
+      gi.appendChild(field('Ring every', 'a softer bell during the sit', chipGroup(intervalOpts, settings.intervalMin, pick('intervalMin'))));
+      gi.appendChild(field('Interval sound', null, chipGroup(A.bells, settings.intervalBell, pick('intervalBell', previewBell(0.55)))));
+      body.appendChild(gi);
+    }
 
-    // Breathing
-    const g3 = group('Breathing guide');
-    const breathOpts = Object.keys(BREATH).map(function (k) { return { id: k, label: BREATH[k].label }; });
-    g3.appendChild(field('Pattern', 'the orb paces your breath', chipGroup(breathOpts, settings.breath, pick('breath'))));
-    g3.appendChild(toggleRow('Breath tones', 'a faint hum on each inhale and exhale', 'breathSound'));
-    body.appendChild(g3);
+    if (tab === 'ambience') {
+      const g2 = group(null);
+      const ambOpts = [{ id: 'none', label: 'Silence' }].concat(A.ambience);
+      g2.appendChild(field('Background sound', 'tap to preview', chipGroup(ambOpts, settings.ambient, pick('ambient', function (v) {
+        if (v === 'none') A.stopAmbient(1);
+        else A.startAmbient(v, 1.2);
+      }))));
+      g2.appendChild(field('Ambience volume', null, slider('ambient-volume', 'ambientVolume', A.setAmbientVolume)));
+      body.appendChild(g2);
+    }
 
-    // Session
-    const g4 = group('Session');
-    const settleOpts = [0, 5, 10, 20, 30].map(function (s) { return { id: s, label: s ? s + ' sec' : 'None' }; });
-    g4.appendChild(field('Settle-in time', 'before the first bell', chipGroup(settleOpts, settings.settle, pick('settle'))));
-    g4.appendChild(toggleRow('Keep screen awake', 'while a session runs', 'wakeLock'));
-    if (navigator.vibrate) g4.appendChild(toggleRow('Vibrate with bells', null, 'haptics'));
-    g4.appendChild(toggleRow('Interface sounds', 'soft ticks and taps', 'uiSounds'));
-    body.appendChild(g4);
+    if (tab === 'breath') {
+      const g3 = group(null);
+      const breathOpts = Object.keys(BREATH).map(function (k) { return { id: k, label: BREATH[k].label }; });
+      g3.appendChild(field('Pattern', 'the orb paces your breath', chipGroup(breathOpts, settings.breath, pick('breath'))));
+      g3.appendChild(toggleRow('Breath tones', 'a faint hum on each inhale and exhale', 'breathSound'));
+      const settleOpts = [0, 5, 10, 20, 30].map(function (s) { return { id: s, label: s ? s + ' sec' : 'None' }; });
+      g3.appendChild(field('Settle-in time', 'before the first bell', chipGroup(settleOpts, settings.settle, pick('settle'))));
+      body.appendChild(g3);
+    }
 
-    // Appearance
-    const g5 = group('Appearance');
-    const lookOpts = [{ id: 'auto', label: 'Match device' }, { id: 'night', label: 'Night' }, { id: 'dawn', label: 'Dawn' }, { id: 'forest', label: 'Forest' }];
-    g5.appendChild(field('Theme', null, chipGroup(lookOpts, settings.look, pick('look', applyLook))));
-    body.appendChild(g5);
+    if (tab === 'general') {
+      const g4 = group('Session');
+      g4.appendChild(toggleRow('Keep screen awake', 'while a session runs', 'wakeLock'));
+      if (navigator.vibrate) g4.appendChild(toggleRow('Vibrate with bells', null, 'haptics'));
+      g4.appendChild(toggleRow('Interface sounds', 'soft ticks and taps', 'uiSounds'));
+      body.appendChild(g4);
 
-    // Data
-    const g6 = group('Your data');
-    const note = document.createElement('p');
-    note.className = 'row-text';
-    note.style.margin = '0';
-    note.innerHTML = 'History stays on this device.<small>' + sessions.length + ' session' + (sessions.length === 1 ? '' : 's') + ' saved</small>';
-    g6.appendChild(note);
-    const clear = document.createElement('button');
-    clear.type = 'button';
-    clear.className = 'danger';
-    clear.textContent = 'Clear history';
-    let armed = false, armTimer;
-    clear.addEventListener('click', function () {
-      if (!armed) {
-        armed = true;
-        clear.textContent = 'Tap again to clear';
-        ui('tap');
-        armTimer = setTimeout(function () { armed = false; clear.textContent = 'Clear history'; }, 3000);
-        return;
-      }
-      clearTimeout(armTimer);
-      sessions = [];
-      saveSessions();
-      renderGreeting();
-      renderSettings();
-      toast('History cleared');
+      // Appearance
+      const g5 = group('Appearance');
+      const lookOpts = [{ id: 'auto', label: 'Match device' }, { id: 'night', label: 'Night' }, { id: 'dawn', label: 'Dawn' }, { id: 'forest', label: 'Forest' }];
+      g5.appendChild(field('Theme', null, chipGroup(lookOpts, settings.look, pick('look', applyLook))));
+      body.appendChild(g5);
+
+      // Data
+      const g6 = group('Your data');
+      const note = document.createElement('p');
+      note.className = 'row-text';
+      note.style.margin = '0';
+      note.innerHTML = 'History stays on this device.<small>' + sessions.length + ' session' + (sessions.length === 1 ? '' : 's') + ' saved</small>';
+      g6.appendChild(note);
+      const clear = document.createElement('button');
+      clear.type = 'button';
+      clear.className = 'danger';
+      clear.textContent = 'Clear history';
+      let armed = false, armTimer;
+      clear.addEventListener('click', function () {
+        if (!armed) {
+          armed = true;
+          clear.textContent = 'Tap again to clear';
+          ui('tap');
+          armTimer = setTimeout(function () { armed = false; clear.textContent = 'Clear history'; }, 3000);
+          return;
+        }
+        clearTimeout(armTimer);
+        sessions = [];
+        saveSessions();
+        renderGreeting();
+        renderSettings();
+        toast('History cleared');
+      });
+      if (sessions.length) g6.appendChild(clear);
+      body.appendChild(g6);
+    }
+    fitSoon();
+  }
+
+  /* ---------- Fit to screen ---------- */
+
+  // Each screen and panel keeps its content in a .fit wrapper. When the content is taller than
+  // the space available, the wrapper is scaled down so the app never needs to scroll.
+  function fit(el) {
+    const box = el.parentElement;
+    const cs = getComputedStyle(box);
+    const avail = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const need = el.offsetHeight;
+    const scale = avail > 0 && need > avail + 0.5 ? Math.max(0.4, avail / need) : 1;
+    el.style.transform = scale < 1 ? 'scale(' + scale.toFixed(4) + ')' : '';
+  }
+
+  // Before shrinking the stats panel, drop the oldest rows of the recent list that don't fit.
+  function trimStats() {
+    if (openSheetId !== 'stats') return;
+    const body = $('#stats-body'), box = body.parentElement;
+    const cs = getComputedStyle(box);
+    const avail = box.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    const rows = $$('.recent li', body);
+    while (rows.length > 3 && body.offsetHeight > avail + 0.5) rows.pop().remove();
+  }
+
+  let fitQueued = false;
+  function fitSoon() {
+    if (fitQueued) return;
+    fitQueued = true;
+    requestAnimationFrame(function () {
+      fitQueued = false;
+      trimStats();
+      $$('.fit').forEach(fit);
     });
-    if (sessions.length) g6.appendChild(clear);
-    body.appendChild(g6);
+  }
+
+  function initFit() {
+    if (window.ResizeObserver) {
+      const ro = new ResizeObserver(fitSoon);
+      $$('.fit').forEach(function (el) { ro.observe(el); ro.observe(el.parentElement); });
+    }
+    window.addEventListener('resize', function () {
+      if (openSheetId === 'stats') renderStats();
+      fitSoon();
+    });
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fitSoon);
+    fitSoon();
   }
 
   /* ---------- Stats sheet ---------- */
@@ -656,7 +750,7 @@
       '<div class="tile"><div class="tile-num">' + st.count + '</div><div class="tile-label">Sessions</div></div>' +
       '</div>';
 
-    html += '<div class="chart-head"><h3>Last 7 days</h3><span>' + Math.round(weekMin) + ' min total</span></div>';
+    html += '<div class="stats-chart"><div class="chart-head"><h3>Last 7 days</h3><span>' + Math.round(weekMin) + ' min total</span></div>';
     html += '<div class="week" role="img" aria-label="Minutes meditated over the last seven days">';
     days.forEach(function (d, i) {
       const h = d.min ? Math.max(4, (d.min / max) * 82) : 0;
@@ -666,7 +760,7 @@
     });
     html += '</div><div class="week-labels">';
     days.forEach(function (d) { html += '<span class="' + (d.today ? 'today' : '') + '">' + d.label + '</span>'; });
-    html += '</div>';
+    html += '</div></div>';
 
     html += '<div class="recent"><h3>Recent sessions</h3>';
     if (!sessions.length) {
@@ -684,6 +778,7 @@
     }
     html += '</div>';
     body.innerHTML = html;
+    fitSoon();
   }
   function esc(s) {
     return String(s).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; });
@@ -1078,6 +1173,8 @@
     function loop(now) {
       const dt = Math.min(0.05, (now - last) / 1000);
       last = now;
+      // hold still under an open panel: its background blur would otherwise redraw every frame
+      if (document.body.classList.contains('sheet-open')) { requestAnimationFrame(loop); return; }
       if (frameN++ % 60 === 0) color = getComputedStyle(document.body).getPropertyValue('--mote').trim() || color;
       g.clearRect(0, 0, w, h);
       const slow = document.body.classList.contains('in-session') ? 0.5 : 1;
@@ -1115,6 +1212,7 @@
     renderMoods();
     initDial();
     initSheetDrag();
+    initFit();
     initMotes();
 
     $('#btn-time').addEventListener('click', function () { A.init(); ui('tap'); openTime(); });

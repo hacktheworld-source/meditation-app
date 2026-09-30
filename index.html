@@ -36,6 +36,7 @@
 
   <!-- Home: choose a duration -->
   <section class="screen is-active" id="screen-home" aria-label="Set a timer">
+  <div class="fit">
     <div class="greeting">
       <p class="greeting-line" id="greeting">Good evening</p>
       <p class="greeting-sub" id="greeting-sub">Take a moment for yourself.</p>
@@ -69,10 +70,12 @@
     <button class="primary" id="btn-begin">
       <span>Begin</span>
     </button>
+  </div>
   </section>
 
   <!-- Session -->
   <section class="screen" id="screen-session" aria-label="Meditation in progress">
+  <div class="fit">
     <div class="session-stage">
       <svg class="progress" viewBox="0 0 300 300" aria-hidden="true">
         <circle class="progress-track" cx="150" cy="150" r="140"/>
@@ -98,10 +101,12 @@
       </button>
       <button class="text-btn" id="btn-end">End session</button>
     </div>
+  </div>
   </section>
 
   <!-- Complete -->
   <section class="screen" id="screen-complete" aria-label="Session complete">
+  <div class="fit">
     <div class="complete-mark" aria-hidden="true">
       <svg viewBox="0 0 120 120"><circle class="cm-ring" cx="60" cy="60" r="52"/><path class="cm-check" d="M40 62l14 14 28-30"/></svg>
     </div>
@@ -124,6 +129,7 @@
     </div>
 
     <button class="primary" id="btn-done"><span>Done</span></button>
+  </div>
   </section>
 </div>
 
@@ -138,7 +144,8 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <div class="sheet-body" id="settings-body"></div>
+    <div class="tabs" id="settings-tabs" role="tablist" aria-label="Settings sections"></div>
+    <div class="sheet-body"><div class="fit" id="settings-body" role="tabpanel"></div></div>
   </div>
 </div>
 
@@ -153,7 +160,7 @@
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
       </button>
     </div>
-    <div class="sheet-body" id="stats-body"></div>
+    <div class="sheet-body"><div class="fit" id="stats-body"></div></div>
   </div>
 </div>
 

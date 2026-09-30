@@ -57,6 +57,7 @@
     ambBus.gain.value = ambientVolume;
     ambBus.connect(master);
 
+    setTimeout(prewarm, 1500);
     return ctx;
   }
 
@@ -318,24 +319,52 @@
     drone: 'Drone',
   };
 
-  // Generates `seconds` of stereo audio and crossfades the tail into the head for a seamless loop.
-  function makeLoop(key, seconds, fill) {
+  // Builds a seamless stereo loop: one channel of noise with its tail crossfaded into its head,
+  // and the right channel is the same loop offset by half its length (cheap decorrelation).
+  function makeLoop(key) {
     if (bufferCache[key]) return bufferCache[key];
+    const spec = LOOPS[key];
     const rate = ctx.sampleRate;
-    const len = Math.floor(rate * seconds);
+    const len = Math.floor(rate * spec[0]);
     const fade = Math.floor(rate * 1.5);
-    const buf = ctx.createBuffer(2, len, rate);
-    for (let c = 0; c < 2; c++) {
-      const raw = new Float32Array(len + fade);
-      fill(raw, rate, c);
-      for (let i = 0; i < fade; i++) {
-        const x = i / fade;
-        raw[i] = raw[i] * Math.sqrt(x) + raw[len + i] * Math.sqrt(1 - x);
-      }
-      buf.getChannelData(c).set(raw.subarray(0, len));
+    const raw = new Float32Array(len + fade);
+    spec[1](raw, rate);
+    for (let i = 0; i < fade; i++) {
+      const x = i / fade;
+      raw[i] = raw[i] * Math.sqrt(x) + raw[len + i] * Math.sqrt(1 - x);
     }
+    const buf = ctx.createBuffer(2, len, rate);
+    const left = raw.subarray(0, len);
+    buf.getChannelData(0).set(left);
+    const right = buf.getChannelData(1), half = Math.floor(len / 2);
+    right.set(left.subarray(half));
+    right.set(left.subarray(0, half), len - half);
     bufferCache[key] = buf;
     return buf;
+  }
+
+  function rainFill(d, rate) {
+    pink(d);
+    // bake in droplets: short bright blips scattered randomly
+    const count = Math.floor((d.length / rate) * 40);
+    for (let k = 0; k < count; k++) {
+      const at = Math.floor(Math.random() * d.length);
+      const f = 1800 + Math.random() * 4200;
+      const amp = 0.05 + Math.random() * 0.18;
+      const dur = Math.floor(rate * (0.004 + Math.random() * 0.01));
+      for (let i = 0; i < dur && at + i < d.length; i++) {
+        d[at + i] += Math.sin((2 * Math.PI * f * i) / rate) * amp * Math.exp(-i / (dur / 4));
+      }
+    }
+  }
+
+  // Generating noise takes real CPU time on phones, so loops are built one at a time
+  // while the page is idle, before anyone asks for them.
+  function prewarm() {
+    const next = Object.keys(LOOPS).find(function (k) { return !bufferCache[k]; });
+    if (!next) return;
+    const idle = window.requestIdleCallback || function (fn) { return setTimeout(fn, 200); };
+    idle(function () { makeLoop(next); prewarm(); }, { timeout: 3000 });
   }
 
   function pink(d) {
@@ -362,6 +391,8 @@
     }
   }
 
+  const LOOPS = { rain: [10, rainFill], brown: [10, brown], pink: [8, pink] };
+
   function lfo(freq, depth, offset, target) {
     const o = ctx.createOscillator();
     o.frequency.value = freq;
@@ -386,46 +417,33 @@
     };
 
     if (type === 'rain') {
-      const buf = makeLoop('rain', 12, function (d, rate) {
-        pink(d);
-        // bake in droplets: short bright blips scattered randomly
-        const count = Math.floor((d.length / rate) * 40);
-        for (let k = 0; k < count; k++) {
-          const at = Math.floor(Math.random() * d.length);
-          const f = 1800 + Math.random() * 4200;
-          const amp = 0.05 + Math.random() * 0.18;
-          const dur = Math.floor(rate * (0.004 + Math.random() * 0.01));
-          for (let i = 0; i < dur && at + i < d.length; i++) {
-            d[at + i] += Math.sin((2 * Math.PI * f * i) / rate) * amp * Math.exp(-i / (dur / 4));
-          }
-        }
-      });
+      const buf = makeLoop('rain');
       const s = loop(buf);
       const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 350;
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 7500;
       const g = ctx.createGain(); g.gain.value = 0.9;
       s.connect(hp); hp.connect(lp); lp.connect(g); g.connect(out);
     } else if (type === 'ocean') {
-      const s = loop(makeLoop('brown', 20, brown));
+      const s = loop(makeLoop('brown'));
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.Q.value = 0.4;
       const g = ctx.createGain();
       nodes.push(lfo(0.083, 450, 700, lp.frequency));
       nodes.push(lfo(0.083, 0.42, 0.62, g.gain));
-      const hiss = loop(makeLoop('pink', 14, pink));
+      const hiss = loop(makeLoop('pink'));
       const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 2500;
       const hg = ctx.createGain();
       nodes.push(lfo(0.083, 0.05, 0.05, hg.gain));
       s.connect(lp); lp.connect(g); g.connect(out);
       hiss.connect(hp); hp.connect(hg); hg.connect(out);
     } else if (type === 'wind') {
-      const s = loop(makeLoop('pink', 14, pink));
+      const s = loop(makeLoop('pink'));
       const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = 1.4;
       const g = ctx.createGain();
       nodes.push(lfo(0.047, 380, 700, bp.frequency));
       nodes.push(lfo(0.071, 0.35, 0.8, g.gain));
       s.connect(bp); bp.connect(g); g.connect(out);
     } else if (type === 'brown') {
-      const s = loop(makeLoop('brown', 20, brown));
+      const s = loop(makeLoop('brown'));
       const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900;
       const g = ctx.createGain(); g.gain.value = 0.9;
       s.connect(lp); lp.connect(g); g.connect(out);
